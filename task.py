@@ -1,13 +1,17 @@
 import argparse
 import csv
-
+from datetime import datetime
 class Task:
-    def __init__(self, description, due_date, tag=None):
+    def __init__(self, description, due_date, priority, duration, tag=None):
         self.description = description
         self.due_date = due_date
         self.completed = False
         self.tag = tag
-    
+        self.priority = priority
+        self.duration = duration
+        self.urgency = None
+        self.score = None
+
     def __str__(self):
         return f"description: {self.description}\ndue date: {self.due_date}\ncomplete: {self.completed}\ntag: {self.tag}"
 
@@ -17,9 +21,6 @@ class Task:
         due_date = input("input due date (dd/mm/yy): ")
         tag = input("Add tag(optional):")
         return cls(description, due_date, tag)
-    
-    
-    
 
 class TaskManager:
     def __init__(self):
@@ -31,14 +32,14 @@ class TaskManager:
     def list_tasks(self):
         if not self.tasks:
             print("no task yet")
-            return 
+            return
         for index, task in enumerate(self.tasks, start=1):
             print(f"\n Task {index}")
             print(task)
 
     def save_to_file(self, filename="task.csv"):
         with open(filename, mode="w", newline="") as file:
-                    writer = csv.DictWriter(file, fieldnames=["description", "due_date", "completed", "tag"])
+                    writer = csv.DictWriter(file, fieldnames=["description", "due_date", "completed", "priority", "duration", "tag"])
                     writer.writeheader()
                     for task in self.tasks:
                         writer.writerow({
@@ -56,7 +57,9 @@ class TaskManager:
                     task = Task(
                         description=row["description"],
                         due_date=row["due_date"],
-                        tag=row["tag"] if row["tag"] else None
+                        tag=row["tag"] if row["tag"] else None,
+                        priority=row["priority"],
+                       duration=row["duration"]
                     )
                     task.completed = row["completed"].lower() == "true"
                     self.tasks.append(task)
@@ -83,7 +86,7 @@ class TaskManager:
             print("❌ invalid task number")
     def complete_task(self, index):
         try:
-            if self.tasks[index].completed == False:
+            if self.tasks[index].completed is False:
                 self.tasks[index].completed = True
                 print(f"✅ Marked task {index + 1} as complete.")
             else:
@@ -91,6 +94,17 @@ class TaskManager:
                 print(f"✅ Marked task {index + 1} as uncomplete.")
         except IndexError:
             print("❌ invalid task number")
+
+    def urgen(self):
+        cur_date = datetime.today().strftime('%d-%m-%Y')
+        date_format = "%d-%m-%Y"
+        t1 = datetime.strptime(cur_date, date_format)
+        for task in self.tasks:
+            t2 = datetime.strptime(task.due_date, date_format)
+            days = (t2 - t1).days
+            task.urgency = (1 / (days + 1)) if days > 0 else (1 + abs(days) * 0.1)
+            task.score = 0.4 * task.urgency + 0.4 * task.priority - 0.2 * task.duration
+
 
 def main():
     parser = argparse.ArgumentParser(description="Task manager")
@@ -102,12 +116,12 @@ def main():
     parser.add_argument("-v", "--view",help="view all tasks", action="store_true")
     parser.add_argument("--due", help="due date for the task", type=str)
     parser.add_argument("-t", "--tag", help="add tag", type=str)
-    
+
     args = parser.parse_args()
     manager = TaskManager()
     manager.load_from_file()
     if args.add:
-        task = Task(description=args.add, due_date=args.due, tag=args.tag)
+        task = Task(description=args.add, due_date=args.due, tag=args.tag, priority=args.priority, duration=args.duration)
         manager.add_task(task)
         manager.save_to_file()
         print("✅ Task added.")
@@ -116,7 +130,7 @@ def main():
         manager.add_task(task)
         manager.save_to_file()
         print("✅ Task added interactively.")
-    
+
     if args.edit is not None:
         manager.edit_task(args.edit - 1)
         manager.save_to_file()
@@ -128,7 +142,7 @@ def main():
         manager.save_to_file()
 
     if args.view:
-            manager.list_tasks()
+        manager.list_tasks()
 
 
 
