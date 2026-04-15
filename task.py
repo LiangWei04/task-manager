@@ -17,10 +17,17 @@ class Task:
 
     @classmethod
     def get(cls):
-        description = input("Task description: ")
-        due_date = input("input due date (dd/mm/yy): ")
-        tag = input("Add tag(optional):")
-        return cls(description, due_date, tag)
+        try:
+            description = input("Task description: ")
+            due_date = input("Input due date (dd-mm-yyyy): ")
+            tag = input("Add tag(optional): ")
+            priority = int(input("Input priority from 1 to 5 where 5 is the top priority: "))
+            duration = int(input("Input duration in hours: "))
+            return cls(description, due_date, priority, duration, tag)
+        except ValueError:
+            print("Invalid input. Priority and duration must be numbers.")
+            return None
+
 
 class TaskManager:
     def __init__(self):
@@ -39,15 +46,17 @@ class TaskManager:
 
     def save_to_file(self, filename="task.csv"):
         with open(filename, mode="w", newline="") as file:
-                    writer = csv.DictWriter(file, fieldnames=["description", "due_date", "completed", "priority", "duration", "tag"])
-                    writer.writeheader()
-                    for task in self.tasks:
-                        writer.writerow({
-                            "description":task.description,
-                            "due_date": task.due_date,
-                            "completed": task.completed,
-                            "tag": task.tag if task.tag else ""
-                        })
+            writer = csv.DictWriter(file, fieldnames=["description", "due_date", "completed", "priority", "duration", "tag"])
+            writer.writeheader()
+            for task in self.tasks:
+                writer.writerow({
+                    "description":task.description,
+                    "due_date": task.due_date,
+                    "completed": task.completed,
+                    "priority": task.priority,
+                    "duration": task.duration,
+                    "tag": task.tag if task.tag else ""
+                })
 
     def load_from_file(self, filename="task.csv"):
         try:
@@ -58,8 +67,8 @@ class TaskManager:
                         description=row["description"],
                         due_date=row["due_date"],
                         tag=row["tag"] if row["tag"] else None,
-                        priority=row["priority"],
-                       duration=row["duration"]
+                        priority=int(row.get("priority", 3)),
+                        duration=int(row.get("duration", 1)),
                     )
                     task.completed = row["completed"].lower() == "true"
                     self.tasks.append(task)
@@ -95,7 +104,7 @@ class TaskManager:
         except IndexError:
             print("❌ invalid task number")
 
-    def urgen(self):
+    def compute(self):
         cur_date = datetime.today().strftime('%d-%m-%Y')
         date_format = "%d-%m-%Y"
         t1 = datetime.strptime(cur_date, date_format)
@@ -116,20 +125,46 @@ def main():
     parser.add_argument("-v", "--view",help="view all tasks", action="store_true")
     parser.add_argument("--due", help="due date for the task", type=str)
     parser.add_argument("-t", "--tag", help="add tag", type=str)
+    parser.add_argument("--priority", type=int, help="1–5 importance level")
+    parser.add_argument("--duration", type=int, help="duration in hours")
 
     args = parser.parse_args()
     manager = TaskManager()
     manager.load_from_file()
+
     if args.add:
-        task = Task(description=args.add, due_date=args.due, tag=args.tag, priority=args.priority, duration=args.duration)
+        if not all([args.due, args.priority, args.duration]):
+            print("Missing required field(s): --due, --priority, --duration")
+            return
+
+        try:
+            datetime.strptime(args.due, "%d-%m-%Y")
+        except ValueError:
+            print("Invalid date format. Use dd-mm-yyyy")
+            return
+
+        if not (1 <= args.priority <= 5):
+            print("Priority must be between 1 and 5")
+            return
+
+        task = Task(
+            description=args.add,
+            due_date=args.due,
+            priority=args.priority,
+            duration=args.duration,
+            tag=args.tag
+        )
+
         manager.add_task(task)
         manager.save_to_file()
-        print("✅ Task added.")
+        print("Task added.")
+
     elif args.interactive:
         task = Task.get()
-        manager.add_task(task)
-        manager.save_to_file()
-        print("✅ Task added interactively.")
+        if task:
+            manager.add_task(task)
+            manager.save_to_file()
+            print("Task added interactively.")
 
     if args.edit is not None:
         manager.edit_task(args.edit - 1)
