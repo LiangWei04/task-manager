@@ -1,4 +1,6 @@
 description,due_date,completed,priority,duration,tag
-Finish cs50 web week 1 git,13/8/2025,False,3,1,
-test,15-04-2026,False,3,2,
-Finishing task manager refinement ,19-04-2026,False,5,3,
+practice violin,19-4-2026,False,4,1.0,
+finish club collab proposal ,19-4-2026,False,3,0.2,WSC collab
+testing,25-04-2026,False,3,1.0,
+urgent task,23-04-2026,False,5,1.0,
+urgent tasks,23-04-2026,False,5,1.0,

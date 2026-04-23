@@ -1,6 +1,6 @@
 import argparse
 import csv
-from datetime import datetime
+from datetime import datetime, timedelta
 class Task:
     def __init__(self, description, due_date, priority, duration, tag=None):
         self.description = description
@@ -13,17 +13,37 @@ class Task:
         self.score = None
 
     def __str__(self):
-        return f"description: {self.description}\ndue date: {self.due_date}\ncomplete: {self.completed}\ntag: {self.tag}"
+        return f"description: {self.description}\ndue date: {self.due_date}\ncomplete: {self.completed}\ntag: {self.tag}\npriority: {self.priority}\nduration: {self.duration}"
 
     @classmethod
     def get(cls):
         try:
-            description = input("Task description: ")
-            due_date = input("Input due date (dd-mm-yyyy): ")
-            tag = input("Add tag(optional): ")
-            priority = int(input("Input priority from 1 to 5 where 5 is the top priority: "))
-            duration = int(input("Input duration in hours: "))
+            description = input("Task description: ").strip()
+            due_date = input("Input due date (dd-mm-yyyy): ").strip()
+            tag = input("Add tag(optional): ").strip()
+            priority = int(input("Input priority from 1 to 5 where 5 is the top priority: ").strip())
+            duration = float(input("Input duration in hours: ").strip())
+
+            if duration <= 0:
+                print("Duration should be positive.")
+                return
+
+            if not description or not due_date or not priority or not duration:
+                print("Missing required field(s): --due, --priority, --duration, --description")
+                return
+
+            try:
+                datetime.strptime(due_date, "%d-%m-%Y")
+            except ValueError:
+                print("Invalid date format. Use dd-mm-yyyy")
+                return
+
+            if not (1 <= priority <= 5):
+                print("Priority must be between 1 and 5")
+                return
+
             return cls(description, due_date, priority, duration, tag)
+
         except ValueError:
             print("Invalid input. Priority and duration must be numbers.")
             return None
@@ -61,6 +81,7 @@ class TaskManager:
     def load_from_file(self, filename="task.csv"):
         try:
             with open(filename, mode="r", newline="") as file:
+                
                 reader = csv.DictReader(file)
                 for row in reader:
                     task = Task(
@@ -68,7 +89,7 @@ class TaskManager:
                         due_date=row["due_date"],
                         tag=row["tag"] if row["tag"] else None,
                         priority=int(row.get("priority", 3)),
-                        duration=int(row.get("duration", 1)),
+                        duration=float(row.get("duration", 1)),
                     )
                     task.completed = row["completed"].lower() == "true"
                     self.tasks.append(task)
@@ -78,62 +99,125 @@ class TaskManager:
     def edit_task(self, index):
         try:
             task = self.tasks[index]
-            print("Leave blank to keep current value.")
-            new_desc = input(f"New description (current {task.description}): ") or task.description
-            new_due = input(f"New due date (current {task.due_date})") or task.due_date
-            new_tag = input(f"New tag (current {task.tag})") or task.tag
-            task.description = new_desc
-            task.due_date = new_due
-            task.tag = new_tag
         except IndexError:
-            print("❌ invalid task number")
+            print("Invalid task number")
+            return
+
+        print("Leave blank to keep current value.")
+
+        new_desc = input(f"New description (current {task.description}): ").strip()
+        new_due = input(f"New due date (current {task.due_date}): ").strip()
+        new_tag = input(f"New tag (current {task.tag}): ").strip()
+        new_priority = input(f"New priority (current {task.priority}): ").strip()
+        new_duration = input(f"New duration (current {task.duration}): ").strip()
+
+        if not new_desc:
+            new_desc = task.description
+
+        if not new_due:
+            new_due = task.due_date
+        else:
+            try:
+                datetime.strptime(new_due, "%d-%m-%Y")
+            except ValueError:
+                print("Invalid date format. Use dd-mm-yyyy")
+                return
+
+        if not new_tag:
+            new_tag = task.tag
+
+        if not new_priority:
+            new_priority = task.priority
+        else:
+            try:
+                new_priority = int(new_priority)
+            except ValueError:
+                print("Priority must be a whole number")
+                return
+            if not (1 <= new_priority <= 5):
+                print("Priority must be between 1 and 5")
+                return
+
+        if not new_duration:
+            new_duration = task.duration
+        else:
+            try:
+                new_duration = float(new_duration)
+            except ValueError:
+                print("Duration must be a number")
+                return
+
+        task.description = new_desc
+        task.due_date = new_due
+        task.tag = new_tag
+        task.priority = new_priority
+        task.duration = new_duration
+
     def delete_task(self, index):
         try:
             removed = self.tasks.pop(index)
-            print(f"remove task {removed.description}")
+            print(f"Remove task {removed.description}")
         except IndexError:
-            print("❌ invalid task number")
+            print("Invalid task number")
     def complete_task(self, index):
         try:
             if self.tasks[index].completed is False:
                 self.tasks[index].completed = True
-                print(f"✅ Marked task {index + 1} as complete.")
+                print(f"Marked task {index + 1} as complete.")
             else:
                 self.tasks[index].completed = False
-                print(f"✅ Marked task {index + 1} as uncomplete.")
+                print(f"Marked task {index + 1} as uncomplete.")
         except IndexError:
-            print("❌ invalid task number")
+            print("Invalid task number")
+class TaskScheduler:
+    def __init__(self, tasks):
+        self.tasks = tasks
 
-    def compute(self):
-        cur_date = datetime.today().strftime('%d-%m-%Y')
-        date_format = "%d-%m-%Y"
-        t1 = datetime.strptime(cur_date, date_format)
-        for task in self.tasks:
-            t2 = datetime.strptime(task.due_date, date_format)
-            days = (t2 - t1).days
-            task.urgency = (1 / (days + 1)) if days > 0 else (1 + abs(days) * 0.1)
-            task.score = 0.4 * task.urgency + 0.4 * task.priority - 0.2 * task.duration
+    def compute_score(self, task, cur_time):
+        due_date = datetime.strptime(task.due_date, "%d-%m-%Y")
+        days = (due_date - cur_time).days
+
+        urgency = (1 / (days + 1)) if days > 0 else (1 + abs(days) * 0.1)
+
+        return 0.4 * urgency + 0.4 * task.priority - 0.2 * task.duration
+
+    def recommended_order(self):
+        remaining = self.tasks[:]
+        order = []
+
+        cur_time = datetime.now()
+
+        while remaining:
+            best_task = max(remaining, key=lambda t: self.compute_score(t, cur_time))
+            order.append(best_task)
+
+            cur_time += timedelta(hours=best_task.duration)
+            remaining.remove(best_task)
+
+        return order
 
 
 def main():
     parser = argparse.ArgumentParser(description="Task manager")
     parser.add_argument("-a", "--add" ,help="add argument", type=str)
     parser.add_argument("--interactive", help="launch interactive task input", action="store_true")
-    parser.add_argument("-e", "--edit",  help="edit task", type=str)
-    parser.add_argument("-d", "--delete",help="delete task", type=str)
-    parser.add_argument("-c", "--complete",help="mark complete", type=str)
+    parser.add_argument("-e", "--edit",  help="edit task", type=int)
+    parser.add_argument("-d", "--delete",help="delete task", type=int)
+    parser.add_argument("-c", "--complete",help="mark complete", type=int)
     parser.add_argument("-v", "--view",help="view all tasks", action="store_true")
+    parser.add_argument("-o", "--order",help="Suggest task by priority", action="store_true")
     parser.add_argument("--due", help="due date for the task", type=str)
     parser.add_argument("-t", "--tag", help="add tag", type=str)
     parser.add_argument("--priority", type=int, help="1–5 importance level")
-    parser.add_argument("--duration", type=int, help="duration in hours")
+    parser.add_argument("--duration", type=float, help="duration in hours")
 
     args = parser.parse_args()
     manager = TaskManager()
     manager.load_from_file()
 
+
     if args.add:
-        if not all([args.due, args.priority, args.duration]):
+        if args.due is None or args.priority is None or args.duration is None:
             print("Missing required field(s): --due, --priority, --duration")
             return
 
@@ -166,6 +250,8 @@ def main():
             manager.save_to_file()
             print("Task added interactively.")
 
+
+
     if args.edit is not None:
         manager.edit_task(args.edit - 1)
         manager.save_to_file()
@@ -179,7 +265,11 @@ def main():
     if args.view:
         manager.list_tasks()
 
-
+    if args.order:
+        scheduler = TaskScheduler([task for task in manager.tasks if not task.completed])    
+        order = scheduler.recommended_order()
+        for i, task in enumerate(order, start=1):
+            print(f"{i}. {task.description}")
 
 if __name__ == "__main__":
     main()
